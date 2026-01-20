@@ -22,11 +22,8 @@ client.onStateChange = function (state) {
   const rooms = client.availableRooms();
   const exists = rooms.some(r => r.name === "room1");
 
-  if (exists) {
-    client.joinRoom("room1");
-  } else {
     client.createRoom("room1", { maxPlayers: 2 });
-  }
+    client.joinRoom("room1");
 }
 };
 
