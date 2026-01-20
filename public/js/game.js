@@ -1,4 +1,4 @@
-import {reConnect,roomConnect,sendPhotonMessage} from './photon_src.js';
+import {reConnect,sendPhotonMessage} from './photon_src.js';
 
 // ……関数群の上部にこれを追加（グローバル変数として保持）
 let afterCommitHook = null;
@@ -80,8 +80,7 @@ let afterCommitHook = null;
 
     function onlineConnect(){
       reConnect();
-      roomConnect();
-      
+        
       setSend(sendMessage);
     }
   
