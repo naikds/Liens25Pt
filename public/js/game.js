@@ -1,4 +1,4 @@
-import {reConnect,joinRoom,sendPhotonMessage} from './photon_src.js';
+import {reConnect,roomConnect,sendPhotonMessage} from './photon_src.js';
 
 // ……関数群の上部にこれを追加（グローバル変数として保持）
 let afterCommitHook = null;
@@ -80,8 +80,7 @@ let afterCommitHook = null;
 
     function onlineConnect(){
       reConnect();
-      createRoom('room1');
-      joinRoom('room1');
+      roomConnect();
       
       setSend(sendMessage);
     }
@@ -453,7 +452,13 @@ let afterCommitHook = null;
     }
   
     // ====== 入力 ======
-    canvas.addEventListener('click', (e)=>{
+    canvas.addEventListener('click', (e)=>{     
+      // ★ 追加：自分の手番でないなら入力無効
+      if (!isLocalTurn()) {
+        updateStatus('相手の手番です');
+        return;
+      }
+
       const rect=canvas.getBoundingClientRect();
       const mx=(e.clientX-rect.left)*(canvas.width/rect.width);
       const my=(e.clientY-rect.top)*(canvas.height/rect.height);
@@ -685,12 +690,70 @@ let afterCommitHook = null;
   
     draw(); updateStatus(); updateCounters();
     return { ok:true };
+  
   }
+
+  
+// ==== 追加：ロール（ローカルが先手/後手どちらを操作するか） ====
+let localRole = null; // "p1" or "p2"。未設定なら両側入力可（オフライン動作優先）
+
+function setLocalRole(role) {
+  if (role !== 'p1' && role !== 'p2') throw new Error('invalid role');
+  localRole = role;
+  // ステータスに軽く反映
+  updateStatus(`役割を設定：あなたは ${role === 'p1' ? '先手（赤）' : '後手（青）'} です`);
+}
+
+function getLocalRole() {
+  return localRole; // "p1" | "p2" | null
+}
+
+// ==== クリック入力ガードのためのヘルパ ====
+function isLocalTurn() {
+  if (!localRole) return true; // 未設定ならガードしない（オフライン互換）
+  const lp = (localRole === 'p1') ? 1 : 2;
+  return currentPlayer === lp;
+}
+``
+
+function decideRoleRandom() {
+  return (Math.random() < 0.5) ? 'p1' : 'p2';
+}
+
+function getYouRole(){
+  if(getLocalRole() == 'p1'){return 'p2';}
+  else{return 'p1'}
+}
+
+export function applyRole(roleString) {
+  if (roleString !== 'p1' && roleString !== 'p2') {
+    return { ok:false, error:'invalid_role' };
+  }
+  try {
+    setLocalRole(roleString);
+    return { ok:true };
+  } catch (e) {
+    return { ok:false, error: e.message };
+  }
+}
+
+export function createRole(){
+  const myRole = decideRoleRandom();
+  setLocalRole(myRole);
+  
+  sendPhotonMessage(5,getYouRole());
+}
   
   // ★ 外部に公開
   window.OnlineAPI = {
     setSend,
     applyRemote,
+    sendMessage,
+    setLocalRole,
+    getLocalRole,
+    isLocalTurn,
+    decideRoleRandom,
+    applyRole,
     // おまけ：デシンク対策にスナップショット/復元（必要なら使ってください）
     exportSnapshot: () => JSON.stringify({
       v: PROTOCOL_VERSION,
@@ -721,4 +784,5 @@ let afterCommitHook = null;
     }
   };
   
-  
+
+``

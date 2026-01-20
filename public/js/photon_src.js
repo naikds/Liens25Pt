@@ -1,4 +1,4 @@
-import {applyRemote} from './game.js';
+import {applyRemote,createRole,applyRole} from './game.js';
 
 //Photonサーバ系
 // Photonサーバの設定
@@ -7,6 +7,8 @@ const appVersion = '1.0'; // アプリケーションバージョンを設定
 const region = 'us'; // 使用するリージョンを設定（例：'us', 'eu', 'asia' など）
 
 const client = new Photon.LoadBalancing.LoadBalancingClient(Photon.ConnectionProtocol.Wss, appId, appVersion);
+let room = null;
+
 client.connectOptions = { 
   keepAliveTimeout: 30000, // WebSocketのkeep-aliveタイムアウト（ミリ秒） 
   disconnectTimeout: 60000 // サーバーが応答しない場合のタイムアウト（ミリ秒）
@@ -22,6 +24,7 @@ client.onStateChange = function (state) {
 client.onJoinRoom = function () {
   console.log(`Joined room: ${client.myRoom().name}`);
   // result.innerHTML = `サーバ: ${`Joined room: ${client.myRoom().name}`}`;
+  sendPhotonMessage(3,'roomjoin');
 };
 
 // ルーム作成成功時の処理
@@ -36,11 +39,20 @@ client.onError = function (errorCode, errorMessage) {
 
 //ルーム取得処理
 client.onRoomList = function(rooms){
+  room = rooms
+}
 
+//ルーム処理
+export function roomConnect(){
+  if(room === null){
+    createRoom('room1');
+  }else{
+    joinRoom('room1');
+  }
 }
 
 //ルーム作成処理
-export function createRoom(roomName){
+function createRoom(roomName){
   if (roomName) {
     client.createRoom(roomName, { maxPlayers: 2 });
     client.joinRoom(roomName);
@@ -48,7 +60,7 @@ export function createRoom(roomName){
 }
 
 //ルーム参加処理
-export function joinRoom(roomName){
+function joinRoom(roomName){
   if (roomName) {
     client.connectToRegionMaster(region);
     client.joinRoom(roomName);
@@ -70,6 +82,14 @@ client.onEvent = function (code, content, actorNr) {
   console.log(`Received event: ${code} from ${actorNr} with content: ${content}`);
   if (code === 1) { // コード1はメッセージイベントとします
     applyRemote(content);
+  }
+
+  if(code === 3){
+    createRole();
+  }
+
+  if(code ===5){
+    applyRole(content);
   }
 };
 
