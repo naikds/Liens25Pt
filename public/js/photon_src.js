@@ -18,6 +18,16 @@ client.onStateChange = function (state) {
   const stateName = getStateName(state);
   console.log(`Photon state changed to: ${stateName}`);
   // result.innerHTML = `サーバ: ${stateName}`;
+  if (state === Photon.LoadBalancing.LoadBalancingClient.State.JoinedLobby) {
+  const rooms = client.availableRooms();
+  const exists = rooms.some(r => r.name === "room1");
+
+  if (exists) {
+    client.joinRoom("room1");
+  } else {
+    client.createRoom("room1", { maxPlayers: 2 });
+  }
+}
 };
 
 // ルーム参加成功時の処理
@@ -36,36 +46,6 @@ client.onCreatedRoom = function () {
 client.onError = function (errorCode, errorMessage) {
   console.error(`Photon error: ${errorCode} - ${errorMessage}`);
 };
-
-//ルーム取得処理
-client.onRoomList = function(rooms){
-  room = rooms
-}
-
-//ルーム処理
-export function roomConnect(){
-  if(room === null){
-    createRoom('room1');
-  }else{
-    joinRoom('room1');
-  }
-}
-
-//ルーム作成処理
-function createRoom(roomName){
-  if (roomName) {
-    client.createRoom(roomName, { maxPlayers: 2 });
-    client.joinRoom(roomName);
-  }
-}
-
-//ルーム参加処理
-function joinRoom(roomName){
-  if (roomName) {
-    client.connectToRegionMaster(region);
-    client.joinRoom(roomName);
-  }
-}
 
 export function reConnect(){
   client.connectToRegionMaster(region);
