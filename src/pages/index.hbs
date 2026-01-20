@@ -1,263 +1,90 @@
+
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ポケカ</title>
-  <link rel="stylesheet" href="style.css" type="text/css">
-  <script src="Photon/photon.min.js"></script>
-  <script type="module" src="js/arrange.js"></script>
-  <script type="module" src="js/photon_src.js"></script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>5×5 ライン到達ゲーム（両端伸長 / 直進2マス=各1回 / 斜めON）</title>
+<style>
+  :root {
+    --bg:#f7f7fb; --panel:#fff; --grid:#cbd5e1; --dot:#475569;
+    --red:#e74c3c; --blue:#3498db; --green:#2ecc71; --text:#0f172a;
+    --amber:#f59e0b;
+  }
+  body{ margin:0; padding:24px; background:var(--bg); color:var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "Meiryo", sans-serif; }
+  h1{ font-size:18px; margin:0 0 12px; }
+  .container{ display:grid; grid-template-columns:1fr 340px; gap:16px; align-items:start; }
+  .board-wrap,.panel{ background:var(--panel); border-radius:12px; box-shadow:0 6px 18px rgba(15,23,42,.08); }
+  .board-wrap{ padding:12px; }
+  canvas{ display:block; width:100%; height:auto; border-radius:10px; background:#fff; cursor:pointer; }
+  .panel{ padding:16px; }
+  .row{ margin-bottom:12px; }
+  .row label{ display:block; font-size:14px; margin:6px 0; }
+  .status{ padding:10px 12px; border-radius:8px; background:#f1f5f9; font-size:14px; }
+  .btns button{ margin-right:8px; margin-bottom:8px; padding:8px 12px; font-size:14px; border-radius:8px; border:1px solid #e2e8f0; background:#fff; cursor:pointer; }
+  .btns button:hover{ background:#f8fafc; }
+  .legend{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; font-size:13px; color:#334155; }
+  .chip{ display:inline-flex; align-items:center; gap:6px; }
+  .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .dot.red{ background:var(--red); }
+  .dot.blue{ background:var(--blue); }
+  .dot.green{ background:var(--green); }
+  .note{ font-size:12px; color:#64748b; line-height:1.5; }
+  .counter{ font-size:13px; color:#0f172a; background:#f1f5f9; border-radius:8px; padding:8px; }
+  .counter strong{ color:#111827; }
+</style>
 </head>
-
 <body>
-  <div id="loading">処理中...</div>
-  <div class="container" id="container">
-    <img src="images/back_image.png"
-      alt="backImg" class="backImg" />
-    
-    <!--コイン-->
-    <div class="coin" id="coin">
-      <img src="images/coin_ura.png"
-      alt="裏" class="coinImg" id="coinU" />
-          <img src="images/coin_omote.png"
-      alt="表" class="coinImg" id="coinO" />
-    </div>
-    
-    <!--バトル場(P1)-->
-    <div class="battle nonMousePointer cardBox" id="battle">
-      <div class="dropzone b_ene" id="b_ene0"></div>
-      <div class="dropzone b_too" id="b_too0"></div>
-      <div class="dropzone b_pke" id="b_pke0"></div>
-    </div>
-    
-    <!--バトル場(P2)-->
-    <div class="p2_battle nonMousePointer" id="p2_battle">
-        <div class="p2_b_ene" id="p2_b_ene0"></div>
-        <div class="p2_b_too" id="p2_b_too0"></div>
-        <div class="p2_b_pke" id="p2_b_pke0"></div>
-    </div>
-    
-    <!--ベンチ(P1)-->
-    <template id="bench">
-      <div class="bench nonMousePointer cardBox">
-        <div class="dropzone b_ene"></div>
-        <div class="dropzone b_too"></div>
-        <div class="dropzone b_pke"></div>
-      </div>
-    </template>
-    <div class="benchbox" id="benchbox"></div>
-    
-    <!--ベンチ(P2)-->
-    <template id="p2_bench">
-      <div class="p2_bench nonMousePointer">
-        <div class="p2_b_ene"></div>
-        <div class="p2_b_too"></div>
-        <div class="p2_b_pke"></div>
-      </div>
-    </template>
-    <div class="p2_benchbox" id="p2_benchbox"></div>
-    
-    <!--手札-->
-    <div class="dropzone hand cardBox" id="hand"></div>
-    
-    <!--フリー(P1)-->
-    <div class="dropzone free nonMousePointer cardBox" id="free"></div>
-    
-    <!--フリー(P2)-->
-    <div class="free" style="top:20%" id="p2_free"></div>
-    
-    <!--sスタジアム(P1)-->
-    <div class="dropzone stadium nonMousePointer cardBox" id="stadium"></div>
-    
-    <!--スタジアム(P2)-->
-    <div class="stadium" style="top:26%" id="p2_stadium"></div>
-    
-    <!--カード（P1テンプレート）-->
-    <template id="card">
-      <img alt="card" class="draggable card selectable" />
-    </template>
-    
-    <!--カード（P2テンプレート）-->
-    <template id="p2_card">
-      <img alt="card" class="draggable p2_card selectable" />
-    </template>
-    
-    <!--ベンチメニュー-->
-    <template id="benchInfo">
-      <div class="benchInfo menuBtn" data-menu="bench_menu">
-      </div>
-    </template>
-    <div class="menu" id="bench_menu" data-pr="benchbox" data-lf="l" data-top="t" data-lfmg="0.2" data-topmg="1">
-      <ul>
-        <li class="menu-item" data-action="irekae">バトル場と入れ替える</li>
-        <li class="menu-item" data-action="bench_trash">トラッシュ送る</li>
-        <li class="menu-item" data-action="bench_deck">デッキに戻す(+シャッフル)</li>
-      </ul>
-    </div>
-    
-    <!--ハンドメニュー-->
-    <div class="handInfo menuBtn" data-menu="hand_menu" id="handInfo">
-    </div>
-    <div class="menu" id="hand_menu" data-pr="handInfo" data-lf="l" data-top="b" data-lfmg="1" data-topmg="1">
-      <ul>
-        <li class="menu-item" data-action="hand_trash">全てトラッシュに送る</li>
-        <li class="menu-item" data-action="hand_deck_under">全て山札の下へ送る</li>
-        <li class="menu-item" data-action="hand_deck">デッキに戻す(+シャッフル)</li>
-        <li class="menu-item" data-action="hand_show">一覧表示</li>
-        <li class="menu-item menuBtnMenu" data-menu="handXmenu" data-action="hand_Xshow">サポート</li>
-        <li class="menu-item" data-action="hand_p2show">相手に手札を見せる</li>
-      </ul>
-    </div>
-    <div class="menu submenu" id="handXmenu"  data-pr="handInfo" data-lf="l" data-top="b" data-lfmg="3.2" data-topmg="1">
-      <ul>
-        <li class="menu-item submenu-item" data-action="ri-rie">リーリエの決心</li>
-        <li class="menu-item submenu-item" data-action="jaji-man">ジャッジマン</li>
-      </ul>
-    </div>
-    
-    <!--フリーメニュー-->
-    <div class="freeInfo menuBtn" data-menu="free_menu" id="freeInfo">
-    </div>
-    <div class="menu" id="free_menu" data-pr="freeInfo" data-lf="l" data-top="t" data-lfmg="1" data-topmg="1">
-      <ul>
-        <li class="menu-item" data-action="free_trash">全てトラッシュに送る</li>
-      </ul>
-    </div>
-    
-    <!--バトル場メニュー-->
-    <div class="battleInfo menuBtn" data-menu="battle_menu" id="battleInfo">
-    </div>
-    <div class="menu" id="battle_menu" data-pr="battleInfo" data-lf="r" data-top="t" data-lfmg="1" data-topmg="1">
-      <ul>
-        <li class="menu-item" data-action="battle_trash">トラッシュに送る</li>
-        <li class="menu-item" data-action="battle_deck">デッキに戻す(+シャッフル)</li>
-      </ul>
-    </div>
-    
-    <!--プレイヤー情報-->
-      <div class="playerinfo" id="p1Info"></div>
-      <div class="playerinfo" id="p2Info" style="top:0%;"></div>
-
-    <!--ダメカン-->
-    <template id="damageSel">
-      <select class="damageSel">
-      </select>
-    </template>
-    <template id="p2_damageSel">
-      <div class="p2_damageSel">0</div>
-    </template>
-    <div class="p2_damageSel" style="left:39%;top:34%;width:12%;height:2%" id="p2_damageSel_battle">0</div>
-    
-    <!--デッキ + デッキメニュー-->
-    <div class="dropzone deck menuBtn cardBox" data-menu="deck_menu" id="deck">Deck</div>
-    <div class="menu" id="deck_menu"  data-pr="deck" data-lf="r" data-top="t" data-lfmg="1" data-topmg="1">
-      <ul>
-        <li class="menu-item" data-action="draw">1枚引く</li>
-        <li class="menu-item menuBtnMenu" data-menu="deckXmenu" data-action="deck_Xshow">上からN枚見る</li>
-        <li class="menu-item" data-action="deck_shufl">シャッフルする</li>
-        <li class="menu-item" data-action="deck_show">中身を見る</li>
-        <li class="menu-item" data-action="reset">初期配置にする</li>
-      </ul>
-    </div>
-    <div class="menu submenu" id="deckXmenu"  data-pr="deck" data-lf="r" data-top="t" data-lfmg="3.2" data-topmg="1">
-      <ul>
-        <li class="menu-item submenu-item" data-action="Xnum" data-xnum="1">1枚</li>
-        <li class="menu-item submenu-item" data-action="Xnum" data-xnum="2">2枚</li>
-        <li class="menu-item submenu-item" data-action="Xnum" data-xnum="3">3枚</li>
-        <li class="menu-item submenu-item" data-action="Xnum" data-xnum="4">4枚</li>
-        <li class="menu-item submenu-item" data-action="Xnum" data-xnum="5">5枚</li>
-        <li class="menu-item submenu-item" data-action="Xnum" data-xnum="6">6枚</li>
-        <li class="menu-item submenu-item" data-action="Xnum" data-xnum="7">7枚</li>
-      </ul>
-    </div>
-
-    
-    <!--トラッシュ + トラッシュメニュー-->
-    <div class="dropzone trash menuBtn cardBox" data-menu="trash_menu" id="trash">Trash</div>
-    <div class="menu" id="trash_menu"  data-pr="trash" data-lf="r" data-top="t" data-lfmg="1" data-topmg="1">
-      <ul>
-        <li class="menu-item" data-action="trash_show">中身を見る</li>
-      </ul>
-    </div>
-    
-    <!--サイド + サイドメニュー-->
-    <div class="dropzone side menuBtn cardBox" data-menu="side_menu" id="side">Side</div>
-    <div class="menu" id="side_menu"  data-pr="side" data-lf="r" data-top="t" data-lfmg="1" data-topmg="1">
-      <ul>
-        <li class="menu-item" data-action="side_draw1">1枚引く</li>
-        <li class="menu-item" data-action="side_draw2">2枚引く</li>
-        <li class="menu-item" data-action="side_draw3">3枚引く</li>
-        <li class="menu-item" data-action="side_show">中身を見る</li>
-        <li class="menu-item" data-action="side_torikae">とりかえチケット</li>
-      </ul>
-    </div>
-    
-    <!--p2 + p2メニュー-->
-    <div class="p2_menu menuBtn" data-menu="p2_menu" id="p2menu">P2Menu</div>
-    <div class="menu" id="p2_menu"  data-pr="p2menu" data-lf="r" data-top="t" data-lfmg="1" data-topmg="1">
-      <ul>
-        <li class="menu-item" data-action="p2_trashShow">トラッシュの中身を見る</li>
-      </ul>
-    </div>
-
-      <!--下部デッキコード入力欄+ボタン-->
-    <div style="display:flex;position:relative;top:97%;">
-      <!--ボタンとテキスト-->
-      <input class="inputText" type="text" id="urlInput" name="url" placeholder="デッキコードを入力" onClick="this.select()">
-      <div class="submitBtn menuBtn" id="inputBtn" data-menu="input_menu" ></div>
-      <!--ログ-->
-      <div class="result" id="result"></div>
-      <template id="inputXmenu_temp">
-        <li class="menu-item submenu-item room" data-action="XroomJoin" data-xnum="1">1</li>
-      </template>
-    </div>
-    <div class="menu" id="input_menu"  data-pr="inputBtn" data-lf="l" data-top="b" data-lfmg="1" data-topmg="1">
-      <ul>
-        <li class="menu-item" data-action="deckLoad">デッキ読込み</li>
-        <li class="menu-item menuBtnMenu" data-menu="inputXmenu" data-action="roomJoin">ルームに参加</li>
-        <li class="menu-item" data-action="p2Change">2人回し</li>
-      </ul>
-    </div>
-    <div class="menu submenu" id="inputXmenu"  data-pr="inputBtn" data-lf="r" data-top="b" data-lfmg="0.3" data-topmg="1">
-      <ul id="inputXmenu_ul">
-        <li class="menu-item submenu-item" data-action="roomReconect">サーバ接続</li>
-        <li class="menu-item submenu-item" data-action="roomCreate">部屋を立てる</li>
-      </ul>
-    </div>
-    
-    <!--プレイヤー交代ボタン-->
-    <div class="btnChangePl" id="btnChangePl" style="visibility:hidden">
-      <img src="images/cycle.png"
-      alt="ボタンイメージ" class="btnImg" id="btnChangeImg" />
-    </div>
-    
+<div class="container">
+  <div class="board-wrap">
+    <h1>5×5 ライン到達ゲーム（両端伸長 / 直進2マス=各1回 / 斜めON）</h1>
+    <canvas id="board" width="680" height="680"></canvas>
   </div>
-  
-  <!--ここからプレイマット範囲外-->
-      
-  <!--P2カード置き場-->
-  <div class="p2_cardBox" id="p2_deck"></div>
-  <div class="p2_cardBox" id="p2_trash"></div>
-  <div class="p2_cardBox" id="p2_side"></div>
-  <div class="p2_cardBox" id="p2_hand"></div>
+  <div class="panel" role="complementary">
+    <div class="row status" id="status">先手（赤）の初手：下段のいずれかの点から開始してください</div>
 
-  <!-- モーダル -->
-  <div id="modal" class="modal" data-src="">
-    <div class="modal-content">
-      <span class="close" data-modal="modal">×</span>
-      <button class="move" data-target="hand">手札</button>
-      <button class="move" data-target="trash">トラッシュ</button>
-      <button class="move" data-target="deck">山札(下)</button>
-      <button class="move" data-target="free">フリー</button>
-      <button class="ajast">整列表示</button>
-      <div class="image-container">
-      </div>
+    <div class="row legend">
+      <span class="chip"><span class="dot red"></span>先手（下段→上段）</span>
+      <span class="chip"><span class="dot blue"></span>後手（上段→下段）</span>
+      <span class="chip"><span class="dot green"></span>合法手</span>
+    </div>
+
+    <div class="row counter" id="counterBox">
+      直進2マス 残り：
+      <strong>先手 <span id="p1ds">1</span></strong> /
+      <strong>後手 <span id="p2ds">1</span></strong>
+    </div>
+
+    <div class="row">
+      <strong>設定</strong>
+      <label><input type="checkbox" id="allowDiagonals" checked /> 斜め移動を許可する（1マス）</label>
+      <label><input type="checkbox" id="showHints" checked /> 合法手をハイライト表示</label>
+      <label><input type="checkbox" id="forbidCross" checked /> 線の交差（真の交差/重なり）を禁止する</label>
+      <label><input type="checkbox" id="forbidReusePoint" checked /> 使った点の再使用を禁止する</label>
+      <label><input type="checkbox" id="debugWhy" /> デバッグ：不正理由を表示</label>
+    </div>
+
+    <div class="row btns">
+      <button id="undoBtn">一手戻す</button>
+      <button id="resetBtn">リセット</button>
+      <button id="swapSidesBtn">サイド入れ替え（上下反転）</button>
+      <button id="clearSelBtn">選択解除（ESC）</button>
+    </div>
+
+    <div class="row note">
+      <div>✔ 初手は自陣の端（先手＝下段、後手＝上段）から開始。</div>
+      <div>✔ 2手目以降、<strong>自分の線の両端のどちらからでも</strong>伸ばせます（両端伸長）。</div>
+      <div>✔ <strong>直進2マス</strong>：各プレイヤー<strong>ゲーム中1回のみ</strong>。後手は初手から可／先手は初手のみ不可、以降は可（斜め2マスは不可）。</div>
+      <div>✔ 斜めは<strong>1マスのみ</strong>可（デフォルトON）。</div>
+      <div>✔ 点の再使用不可。線の<strong>真の交差/重なり</strong>だけ禁止（近接はOK）。</div>
+      <div>✔ 勝利：自分の線の<strong>どちらかの端</strong>が相手側最前列に到達したら勝利。合法手ゼロは敗北。</div>
     </div>
   </div>
-  
-  <script type="module" src="js/index.js"></script>
+</div>
+
+<!-- 分割した JS を読み込み -->
+<script src="js/game.js"></script>
 </body>
-
 </html>
+``

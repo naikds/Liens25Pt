@@ -34,7 +34,7 @@ fastify.register(require("@fastify/view"), {
 // Load and parse SEO data
 const seo = require("./src/seo.json");
 if (seo.url === "glitch-default") {
-  seo.url = `https://${process.env.PROJECT_DOMAIN}.glitch.me`;
+  seo.url = `https://${process.env.PROJECT_DOMAIN}`;
 }
 
 /**
@@ -119,54 +119,5 @@ fastify.listen(
     console.log(`Your app is listening on ${address}`);
   }
 );
-
-fastify.post("/scrape", async (request, reply) => {
-  const deckCode = request.body.url;
-  const url = `https://www.pokemon-card.com/deck/deck.html?deckID=${deckCode}`;
-
-  if (!deckCode) {
-    return reply.status(400).send({ error: "URL is required" });
-  }
-
-  try {
-    const browser = await puppeteer.launch({
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-    const page = await browser.newPage();
-
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      if (['image', 'stylesheet', 'font'].includes(req.resourceType())) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
-
-    await page.goto(url, { waitUntil: "domcontentloaded" });
-
-    // DOMが完全に読み込まれるまで待機
-    await page.waitForSelector("#cardImagesView");
-
-    // JavaScript実行後のDOMを取得
-    const bodyHTML = await page.evaluate(() => {
-        const container = document.querySelector("#cardImagesView");
-
-        container.querySelectorAll("img").forEach(img => {
-          const imgUrl = new URL(img.src,document.baseURI);
-          img.src = imgUrl.href;
-        });
-
-        return container.innerHTML;
-      }
-    );
-
-    await browser.close();
-    return reply.send({ body: bodyHTML });
-  } catch (error) {
-    console.error("Error:", error);
-    return reply.status(500).send({ error: "An error occurred during scraping" });
-  }
-});
 
 
