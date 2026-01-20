@@ -1,4 +1,4 @@
-// import {arrangeImages} from './arrange.js';
+import {applyRemote} from './game.js';
 
 //Photonサーバ系
 // Photonサーバの設定
@@ -69,12 +69,7 @@ export function sendPhotonMessage(code, message) {
 client.onEvent = function (code, content, actorNr) {
   console.log(`Received event: ${code} from ${actorNr} with content: ${content}`);
   if (code === 1) { // コード1はメッセージイベントとします
-    // result.innerHTML = `Message from ${actorNr}: ${content}`;
-  }
-
-  //ルームに人が参加した場合にデッキの内容を送信
-  if (code === 5) {
-    // sendFirstCardInfo();
+    applyRemote(content);
   }
 };
 

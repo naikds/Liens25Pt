@@ -1,3 +1,7 @@
+import {reConnect,joinRoom,sendPhotonMessage} from './photon_src.js';
+
+// ……関数群の上部にこれを追加（グローバル変数として保持）
+let afterCommitHook = null;
 
 (() => {
     // ====== 盤・定数 ======
@@ -30,6 +34,7 @@
     const p1dsEl = document.getElementById('p1ds');
     const p2dsEl = document.getElementById('p2ds');
     const clearSelBtn = document.getElementById('clearSelBtn');
+    const onlineConnectBtn = document.getElementById('onlineConnectBtn');
   
     // ====== 状態 ======
     let currentPlayer = P1;
@@ -48,8 +53,6 @@
     const equals = (a,b) => a && b && a.x===b.x && a.y===b.y;
     const isOnBoard = (p) => p.x>=0 && p.x<N && p.y>=0 && p.y<N;
     
-  // ……関数群の上部にこれを追加（グローバル変数として保持）
-  let afterCommitHook = null;
   
     function saveHistory() {
       history.push({
@@ -73,6 +76,14 @@
       swapped = s.swapped;
       doubleStepUsed = { ...s.doubleStepUsed };
       draw(); updateStatus(); updateCounters();
+    }
+
+    function onlineConnect(){
+      reConnect();
+      createRoom('room1');
+      joinRoom('room1');
+      
+      setSend(sendMessage);
     }
   
     function updateCounters(){
@@ -568,6 +579,7 @@
     [allowDiagonalsEl, showHintsEl, forbidCrossEl, forbidReusePointEl, debugWhyEl].forEach(el=>{
       el.addEventListener('change', ()=>{ draw(); updateStatus(); updateCounters(); });
     });
+    document.getElementById('onlineConnectBtn').addEventListener('click',()=>{ onlineConnect(); });
   
     // 初期描画
     draw(); updateStatus(); updateCounters();
@@ -599,13 +611,17 @@
       }
     };
   }
+
+  function sendMessage(str){
+    sendPhotonMessage(1,str);
+  }
   
   /**
    * 受信した文字列（JSON）を適用
    * @param {string} msgStr
    * @returns {{ok:boolean, error?:string, winner?:number}}
    */
-  function applyRemote(msgStr){
+  export function applyRemote(msgStr){
     let msg;
     try {
       msg = JSON.parse(msgStr);
