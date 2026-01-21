@@ -11,9 +11,8 @@ let afterCommitHook = null;
   
     // 2マス直進のルール（据え置き）
     const RULES = {
-      allowDoubleStepAfterFirst: true, // 2手目以降は2マス可（権利が残っていれば）
-      allowP2DoubleOnFirst: true,      // 後手は初手から2マス可
-      allowP1DoubleOnFirst: false,     // 先手の初手2マスは不可
+      allowP2DoubleOnFirst: true,      // 後手は可
+      allowP1DoubleOnFirst: false,     // 先手は不可
     };
   
     // ====== 描画 ======
@@ -204,11 +203,8 @@ let afterCommitHook = null;
     // 2マス直進がこの手番で使えるか（権利未使用＋初手例外の考慮）
     function canUseDoubleStepThisTurn(player){
       if (doubleStepUsed[player]) return false; // 既に消費済み
-      if (isFirstMove(player)){
-        if (player === P1) return !!RULES.allowP1DoubleOnFirst;
-        if (player === P2) return !!RULES.allowP2DoubleOnFirst;
-      }
-      return !!RULES.allowDoubleStepAfterFirst;
+      if (player === P1) return !!RULES.allowP1DoubleOnFirst;
+      if (player === P2) return !!RULES.allowP2DoubleOnFirst;
     }
   
     // これは2マス直進の手か？
