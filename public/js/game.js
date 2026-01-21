@@ -439,11 +439,6 @@ let afterCommitHook = null;
   
     // ====== 入力 ======
     canvas.addEventListener('click', (e)=>{     
-      // ★ 追加：自分の手番でないなら入力無効
-      if (!isLocalTurn()) {
-        updateStatus('相手の手番です');
-        return;
-      }
 
       const rect=canvas.getBoundingClientRect();
       const mx=(e.clientX-rect.left)*(canvas.width/rect.width);
