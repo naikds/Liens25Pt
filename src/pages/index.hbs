@@ -33,6 +33,40 @@
   .note{ font-size:12px; color:#64748b; line-height:1.5; }
   .counter{ font-size:13px; color:#0f172a; background:#f1f5f9; border-radius:8px; padding:8px; }
   .counter strong{ color:#111827; }
+  
+/* 1) パネル幅を可変（狭い画面で圧迫しない） */
+.container{
+  /* もともと: grid-template-columns:1fr 340px; を上書き */
+  grid-template-columns: 1fr clamp(240px, 28vw, 340px);
+}
+
+/* 2) 縦長（ポートレート）や幅が狭いときは1カラムにスタック */
+@media (orientation: portrait), (max-width: 900px) {
+  .container{
+    grid-template-columns: 1fr;
+  }
+  .panel{
+    /* ボードの下に来るので余白を付ける */
+    margin-top: 12px;
+  }
+}
+
+/* 3) さらに縦が極端に長い端末向けに、高さ優先でボードをできるだけ大きく表示
+      ただしコンテナ幅を超えないように max-width を効かせる */
+@media (max-aspect-ratio: 3/4) {
+  .board-wrap{
+    /* 内側の余白を維持しつつ、はみ出さないように調整するだけ */
+    overflow: hidden;
+  }
+  #board{
+    /* 画面の高さを使って拡大（ヘッダーや余白分を少し引く）
+       100vhの代わりに100dvhを使うとモバイルのUIで縮まないブラウザも多い */
+    height: calc(100dvh - 220px);
+    width: auto;
+    max-width: 100%;
+  }
+}
+
 </style>
 </head>
 <body>
