@@ -1,5 +1,3 @@
-import {reConnect,sendPhotonMessage} from './photon_src.js';
-
 // ……関数群の上部にこれを追加（グローバル変数として保持）
 let afterCommitHook = null;
 
@@ -33,7 +31,6 @@ let afterCommitHook = null;
     const p1dsEl = document.getElementById('p1ds');
     const p2dsEl = document.getElementById('p2ds');
     const clearSelBtn = document.getElementById('clearSelBtn');
-    const onlineConnectBtn = document.getElementById('onlineConnectBtn');
   
     // ====== 状態 ======
     let currentPlayer = P1;
@@ -75,12 +72,6 @@ let afterCommitHook = null;
       swapped = s.swapped;
       doubleStepUsed = { ...s.doubleStepUsed };
       draw(); updateStatus(); updateCounters();
-    }
-
-    function onlineConnect(){
-      reConnect();
-        
-      setSend(sendMessage);
     }
   
     function updateCounters(){
@@ -579,205 +570,11 @@ let afterCommitHook = null;
     [allowDiagonalsEl, showHintsEl, forbidCrossEl, forbidReusePointEl, debugWhyEl].forEach(el=>{
       el.addEventListener('change', ()=>{ draw(); updateStatus(); updateCounters(); });
     });
-    document.getElementById('onlineConnectBtn').addEventListener('click',()=>{ onlineConnect(); });
   
     // 初期描画
     draw(); updateStatus(); updateCounters();
   })();
-  
-  
-  // ====== Online API（送受信） ======
-  const PROTOCOL_VERSION = 1;
-  
-  let sendFn = null; // 上位（P2P層）から注入される送信関数
-  
-  function setSend(fn){
-    sendFn = fn;
-    // commitSegment 直後に呼ばれるフックをセット
-    afterCommitHook = ({ from, to, player, ds }) => {
-      if (!sendFn) return;
-      const msg = {
-        v: PROTOCOL_VERSION,
-        t: 'm',         // move
-        p: player,      // 1 or 2
-        f: [from.x, from.y],
-        to: [to.x, to.y],
-        ds: !!ds
-      };
-      try {
-        sendFn(JSON.stringify(msg));
-      } catch (e) {
-        console.warn('sendFn failed:', e);
-      }
-    };
-  }
 
-  function sendMessage(str){
-    sendPhotonMessage(1,str);
-  }
-  
-  /**
-   * 受信した文字列（JSON）を適用
-   * @param {string} msgStr
-   * @returns {{ok:boolean, error?:string, winner?:number}}
-   */
-  export function applyRemote(msgStr){
-    let msg;
-    try {
-      msg = JSON.parse(msgStr);
-    } catch {
-      return { ok:false, error:'parse_error' };
-    }
-  
-    if (!msg || msg.v !== PROTOCOL_VERSION || msg.t !== 'm') {
-      return { ok:false, error:'bad_message' };
-    }
-    if (!Array.isArray(msg.f) || !Array.isArray(msg.to)) {
-      return { ok:false, error:'bad_coords' };
-    }
-  
-    const player = msg.p;
-    // ターン整合性チェック：今このローカルが期待している手番と一致するか
-    if (player !== currentPlayer) {
-      return { ok:false, error:`out_of_turn_expected_${currentPlayer}_got_${player}` };
-    }
-  
-    const from = { x: msg.f[0], y: msg.f[1] };
-    const to   = { x: msg.to[0], y: msg.to[1] };
-  
-    // from 妥当性（初手 or 両端）
-    const myPath = paths[player];
-    if (myPath.length === 0) {
-      if (!isOwnStartEdge(player, from)) {
-        return { ok:false, error:'invalid_start_point' };
-      }
-    } else {
-      const t = getTail(player), h = getHead(player);
-      if (!equals(from, t) && !equals(from, h)) {
-        return { ok:false, error:'from_not_endpoint' };
-      }
-    }
-  
-    // 合法性は commitSegment 内でもう一度検証
-    const ok = commitSegment(from, to, player);
-    if (!ok) {
-      return { ok:false, error:'illegal_move' };
-    }
-  
-    // 勝利判定
-    const winner = tryWin(player);
-    if (winner){
-      draw();
-      updateStatus((winner===P1)?'先手（赤）の勝利！':'後手（青）の勝利！');
-      return { ok:true, winner };
-    }
-  
-    // ターン切替 & 相手の詰み判定
-    switchPlayer();
-  
-    if (!hasAnyLegalMove(currentPlayer)){
-      draw();
-      const loser=(currentPlayer===P1)?'先手（赤）':'後手（青）';
-      const winnerName=(currentPlayer===P1)?'後手（青）':'先手（赤）';
-      updateStatus(`${loser}に合法手がありません。${winnerName}の勝利！`);
-      return { ok:true, winner: (currentPlayer===P1)?P2:P1 };
-    }
-  
-    draw(); updateStatus(); updateCounters();
-    return { ok:true };
-  
-  }
-
-  
-// ==== 追加：ロール（ローカルが先手/後手どちらを操作するか） ====
-let localRole = null; // "p1" or "p2"。未設定なら両側入力可（オフライン動作優先）
-
-function setLocalRole(role) {
-  if (role !== 'p1' && role !== 'p2') throw new Error('invalid role');
-  localRole = role;
-  // ステータスに軽く反映
-  updateStatus(`役割を設定：あなたは ${role === 'p1' ? '先手（赤）' : '後手（青）'} です`);
-}
-
-function getLocalRole() {
-  return localRole; // "p1" | "p2" | null
-}
-
-// ==== クリック入力ガードのためのヘルパ ====
-function isLocalTurn() {
-  if (!localRole) return true; // 未設定ならガードしない（オフライン互換）
-  const lp = (localRole === 'p1') ? 1 : 2;
-  return currentPlayer === lp;
-}
-``
-
-function decideRoleRandom() {
-  return (Math.random() < 0.5) ? 'p1' : 'p2';
-}
-
-function getYouRole(){
-  if(getLocalRole() == 'p1'){return 'p2';}
-  else{return 'p1'}
-}
-
-export function applyRole(roleString) {
-  if (roleString !== 'p1' && roleString !== 'p2') {
-    return { ok:false, error:'invalid_role' };
-  }
-  try {
-    setLocalRole(roleString);
-    return { ok:true };
-  } catch (e) {
-    return { ok:false, error: e.message };
-  }
-}
-
-export function createRole(){
-  const myRole = decideRoleRandom();
-  setLocalRole(myRole);
-  
-  sendPhotonMessage(5,getYouRole());
-}
-  
-  // ★ 外部に公開
-  window.OnlineAPI = {
-    setSend,
-    applyRemote,
-    sendMessage,
-    setLocalRole,
-    getLocalRole,
-    isLocalTurn,
-    decideRoleRandom,
-    applyRole,
-    // おまけ：デシンク対策にスナップショット/復元（必要なら使ってください）
-    exportSnapshot: () => JSON.stringify({
-      v: PROTOCOL_VERSION,
-      swapped,
-      paths,
-      used: Array.from(usedPoints),
-      segments,
-      doubleStepUsed
-    }),
-    importSnapshot: (str) => {
-      try {
-        const s = JSON.parse(str);
-        if (s.v !== PROTOCOL_VERSION) return false;
-        saveHistory();
-        // 最低限の整合チェックは省略（用途により強化）
-        // 深いコピーで代入
-        swapped = !!s.swapped;
-        paths[P1] = JSON.parse(JSON.stringify(s.paths[P1] || []));
-        paths[P2] = JSON.parse(JSON.stringify(s.paths[P2] || []));
-        usedPoints.clear(); (s.used||[]).forEach(k => usedPoints.add(k));
-        segments.splice(0, segments.length, ...(s.segments||[]));
-        doubleStepUsed = { ...(s.doubleStepUsed||{[P1]:false,[P2]:false}) };
-        selected = null;
-        currentPlayer = P1; // 必要ならスナップショットに含めて管理してください
-        draw(); updateStatus(); updateCounters();
-        return true;
-      } catch { return false; }
-    }
-  };
   
 
 ``

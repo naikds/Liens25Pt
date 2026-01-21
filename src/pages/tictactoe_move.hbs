@@ -1,0 +1,345 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>相手の記号だけ動かせる三目並べ</title>
+<style>
+  :root{
+    --bg:#0f172a;         /* slate-900 */
+    --panel:#111827;      /* gray-900 */
+    --grid:#1f2937;       /* gray-800 */
+    --line:#374151;       /* gray-700 */
+    --accent:#22c55e;     /* green-500 */
+    --warn:#ef4444;       /* red-500 */
+    --text:#e5e7eb;       /* gray-200 */
+    --muted:#9ca3af;      /* gray-400 */
+    --hi:#60a5fa;         /* blue-400 */
+  }
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:"Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, system-ui, sans-serif;margin:0}
+  .wrap{max-width:960px;margin:0 auto;padding:24px}
+  h1{font-size:20px;margin:0 0 12px}
+  .row{display:flex;gap:16px;flex-wrap:wrap}
+  .left{flex:0 0 320px}
+  .right{flex:1 1 420px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+
+  /* Board */
+  .board{display:grid;grid-template-columns:repeat(3,100px);grid-template-rows:repeat(3,100px);gap:8px;user-select:none}
+  .cell{background:var(--grid);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:56px;cursor:pointer;position:relative;transition:transform .05s}
+  .cell:hover{outline:2px solid var(--line)}
+  .cell.disabled{cursor:default;opacity:.7}
+  .coord{position:absolute;left:8px;top:6px;font-size:11px;color:var(--muted)}
+  .hint{outline:2px solid var(--hi)}
+  .sel{box-shadow:0 0 0 3px var(--hi) inset}
+  .winline{box-shadow:0 0 0 3px var(--accent) inset}
+
+  /* Controls */
+  .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:8px 0}
+  .btn{background:#111827;border:1px solid var(--line);color:var(--text);padding:8px 12px;border-radius:8px;cursor:pointer}
+  .btn:hover{border-color:#6b7280}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{background:transparent;color:var(--text);border:0;padding:8px 12px;cursor:pointer}
+  .seg button.active{background:#0b1220}
+  .note{color:var(--muted);font-size:12px}
+
+  .status{margin-top:8px;padding:10px;border-radius:8px;background:#0b1220;border:1px solid var(--line)}
+  .status b{color:var(--accent)}
+  .status .bad{color:var(--warn)}
+
+  /* Move list */
+  ol{margin:0;padding-left:20px}
+  li{margin:2px 0}
+  code{background:#0b1220;border:1px solid var(--line);padding:1px 6px;border-radius:6px}
+
+  @media (max-width:700px){
+    .left{flex:1 1 100%}
+    .right{flex:1 1 100%}
+    .board{grid-template-columns:repeat(3,minmax(72px,1fr));grid-template-rows:repeat(3,minmax(72px,1fr))}
+    .cell{font-size:44px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>相手の記号だけ動かせる三目並べ <span class="note">（3×3／先手=○、後手=×）</span></h1>
+
+  <div class="row">
+    <div class="left panel">
+      <div class="board" id="board"></div>
+      <div class="controls">
+        <div class="seg" title="隣接の定義">
+          <button id="adj4" class="active">4近傍</button>
+          <button id="adj8">8近傍</button>
+        </div>
+        <button class="btn" id="newgame">新規対局</button>
+        <button class="btn" id="undo">元に戻す</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="right panel">
+      <h3 style="margin-top:0">ルール（要約）</h3>
+      <ul>
+        <li>先手は <b>○</b>、後手は <b>×</b>。空きマスをクリックで自分の記号を置く。</li>
+        <li>かわりに、<b>相手の記号を1つ</b>選び、<b>隣接</b>する空きマスへ<b>ずらす</b>こともできる（2クリック）。</li>
+        <li>手の終了時に、盤上に<b>○または×の3連（縦/横/斜め）</b>が成立していれば、<b>その手番のプレイヤーの勝ち</b>。（自分の記号でなくてもOK）</li>
+        <li>合法手が一切ない場合は引き分け。</li>
+        <li>座標は左上が (0,0)、右下が (2,2)。</li>
+      </ul>
+      <h3>手順</h3>
+      <ol id="movelist"></ol>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const boardEl = document.getElementById('board');
+  const statusEl = document.getElementById('status');
+  const movelistEl = document.getElementById('movelist');
+  const btnNew = document.getElementById('newgame');
+  const btnUndo = document.getElementById('undo');
+  const btnAdj4 = document.getElementById('adj4');
+  const btnAdj8 = document.getElementById('adj8');
+
+  // State
+  let board; // array of 9: 'O','X',''
+  let player; // 'O' or 'X'
+  let over; // boolean
+  let hist; // history stack of {board:[..], player, note}
+  let sel = null; // selected opponent cell index for moving
+  let use8 = false; // adjacency mode
+
+  const idx = (r,c)=> r*3+c;
+  const within = (r,c)=> r>=0 && r<3 && c>=0 && c<3;
+  const coord = (i)=> `(${Math.floor(i/3)},${i%3})`;
+
+  const lines = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6]
+  ];
+
+  function neighbors(i){
+    const r = Math.floor(i/3), c = i%3;
+    const cand = [
+      [r-1,c],[r+1,c],[r,c-1],[r,c+1]
+    ];
+    if(use8){
+      cand.push([r-1,c-1],[r-1,c+1],[r+1,c-1],[r+1,c+1]);
+    }
+    return cand.filter(([rr,cc])=>within(rr,cc)).map(([rr,cc])=>idx(rr,cc));
+  }
+
+  function hasLine(b){
+    for(const L of lines){
+      const [a,b1,c] = L;
+      if(b[a]!=='' && b[a]===b[b1] && b[a]===b[c]) return L; // return winning line indices
+    }
+    return null;
+  }
+
+  function legalMovesExist(b, turn){
+    // place own mark?
+    if(b.some(ch=>ch==='')) return true;
+    // or move opponent to adjacent empty?
+    const opp = turn==='O'?'X':'O';
+    for(let i=0;i<9;i++){
+      if(b[i]===opp){
+        for(const j of neighbors(i)){
+          if(b[j]==='') return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function setAdj(mode){
+    use8 = (mode==='8');
+    btnAdj4.classList.toggle('active', !use8);
+    btnAdj8.classList.toggle('active', use8);
+    render();
+  }
+
+  function reset(){
+    board = Array(9).fill('');
+    player = 'O';
+    over = false;
+    hist = [];
+    sel = null;
+    movelistEl.innerHTML = '';
+    setStatus(`${turnLabel()}：空きマスをクリックで<b>${mark(player)}</b>を配置。相手の${mark(opp(player))}を選ぶと移動モード。`);
+    render();
+  }
+
+  function mark(ch){ return ch==='O'?'○':'×'; }
+  function opp(ch){ return ch==='O'?'X':'O'; }
+  function turnLabel(){ return player==='O'? '手番：先手（○）':'手番：後手（×）'; }
+
+  function pushHistory(note){
+    hist.push({board: board.slice(), player, note});
+    const li = document.createElement('li');
+    li.innerHTML = note;
+    movelistEl.appendChild(li);
+    movelistEl.scrollTop = movelistEl.scrollHeight;
+  }
+
+  function undo(){
+    if(hist.length===0) return;
+    // Pop until we find a snapshot *before* last move applied
+    const last = hist.pop();
+    // Restore previous snapshot if exists; otherwise reset start
+    if(hist.length>0){
+      const prev = hist[hist.length-1];
+      board = prev.board.slice();
+      player = prev.player; // this is the player who was to move at that time
+      // remove the list item as well (we popped one note but the list contains same count)
+      movelistEl.removeChild(movelistEl.lastElementChild);
+      over = false; sel=null;
+    }else{
+      // back to initial
+      reset();
+      return;
+    }
+    setStatus(`${turnLabel()}：やり直し後。`);
+    render();
+  }
+
+  function setStatus(html){ statusEl.innerHTML = html; }
+
+  function finish(winLine){
+    over = true;
+    // highlight winLine if provided
+    if(winLine){
+      const cells = boardEl.querySelectorAll('.cell');
+      winLine.forEach(i=>cells[i].classList.add('winline'));
+    }
+  }
+
+  function render(){
+    boardEl.innerHTML = '';
+    for(let i=0;i<9;i++){
+      const r = Math.floor(i/3), c=i%3;
+      const div = document.createElement('div');
+      div.className = 'cell';
+      if(over) div.classList.add('disabled');
+      const small = document.createElement('div');
+      small.className='coord';
+      small.textContent = `(${r},${c})`;
+      div.appendChild(small);
+      div.dataset.i = i;
+      div.dataset.r = r; div.dataset.c = c;
+      div.textContent = board[i]===''? '': (board[i]==='O'? '○':'×');
+      if(sel===i) div.classList.add('sel');
+      boardEl.appendChild(div);
+    }
+
+    // Hints
+    const cells = boardEl.querySelectorAll('.cell');
+    cells.forEach(cell=>{
+      const i = parseInt(cell.dataset.i,10);
+      if(sel!==null){
+        // show hints for destination cells from selected opponent piece
+        if(board[sel]===opp(player)){
+          for(const j of neighbors(sel)){
+            if(board[j]===''){
+              if(i===j) cell.classList.add('hint');
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function onCellClick(e){
+    if(over) return;
+    const t = e.target.closest('.cell');
+    if(!t) return;
+    const i = parseInt(t.dataset.i,10);
+
+    if(sel!==null){
+      // We are in move-opponent mode: try to move opponent piece at sel to i
+      if(board[sel]===opp(player) && board[i]==='' && neighbors(sel).includes(i)){
+        // snapshot before move
+        pushHistory(`${turnPrefix()} ${mark(opp(player))} を移動 ${coord(sel)} → ${coord(i)}`);
+        // apply
+        board[i]=opp(player); board[sel]=''; sel=null;
+        // check win
+        const L = hasLine(board);
+        if(L){
+          setStatus(`<b>${winLabel()}</b>（${mark(board[L[0]])} の3連）`);
+          finish(L);
+        }else{
+          // switch turn
+          player = opp(player);
+          setStatus(`${turnLabel()}：空きマスをクリックで<b>${mark(player)}</b>を配置。相手の${mark(opp(player))}を選ぶと移動モード。`);
+          render();
+        }
+      }else{
+        // cancel selection if clicking elsewhere
+        sel = null; render();
+      }
+      return;
+    }
+
+    // Not in selection mode
+    if(board[i]===''){
+      // place own mark
+      pushHistory(`${turnPrefix()} ${mark(player)} を配置 ${coord(i)}`);
+      board[i]=player;
+      const L = hasLine(board);
+      if(L){
+        setStatus(`<b>${winLabel()}</b>（${mark(board[L[0]])} の3連）`);
+        finish(L);
+      }else{
+          if (!board.some(ch => ch === '')) {
+            setStatus(`<b class="bad">${turnPrefix()}の負け</b>（満杯になりました）`);
+            finish(null); // win line なし
+            render();
+            return; // 手番を渡さずに終了
+          }  
+        // next turn
+        player = opp(player);
+        setStatus(`${turnLabel()}：空きマスをクリックで<b>${mark(player)}</b>を配置。相手の${mark(opp(player))}を選ぶと移動モード。`);
+        render();
+      }
+    }else if(board[i]===opp(player)){
+      // select opponent piece to move
+      sel = i; render();
+      setStatus(`${turnLabel()}：${mark(opp(player))} を選択中。隣接する空きマスをクリックで移動。`);
+    }else{
+      // clicked own piece -> ignore
+    }
+  }
+
+  function winLabel(){ return player==='O'? '先手（○）の勝ち':'後手（×）の勝ち'; }
+  function turnPrefix(){ return player==='O'? `先手（○）`:`後手（×）`; }
+
+  function newGame(){ reset(); }
+
+  function init(){
+    boardEl.addEventListener('click', onCellClick);
+    btnNew.addEventListener('click', newGame);
+    btnUndo.addEventListener('click', undo);
+    btnAdj4.addEventListener('click', ()=>{ setAdj('4'); });
+    btnAdj8.addEventListener('click', ()=>{ setAdj('8'); });
+
+    reset();
+    setAdj('4');
+  }
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key==='z' && (e.ctrlKey||e.metaKey)){
+      e.preventDefault(); undo();
+    }
+  });
+
+  init();
+})();
+</script>
+</body>
+</html>
+
