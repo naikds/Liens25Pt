@@ -1,5 +1,5 @@
-import express from "express";
-import puppeteer from "puppeteer";
+const express = require("express");
+const puppeteer = require("puppeteer");
 
 const app = express();
 app.use(express.json());
@@ -13,33 +13,25 @@ app.post("/fetch", async (req, res) => {
       headless: "new",
       args: ["--no-sandbox", "--disable-setuid-sandbox"]
     });
-    const page = await browser.newPage();
 
+    const page = await browser.newPage();
     await page.goto(url, { waitUntil: "networkidle2" });
 
-    // HTML を取得
     const html = await page.content();
 
-    // CSS を取得（link と style を抽出）
     const css = await page.evaluate(() => {
       const styles = [];
-
-      // <style> タグ
       document.querySelectorAll("style").forEach(style => {
         styles.push(style.innerHTML);
       });
 
-      // <link rel="stylesheet"> の内容を取得
       const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
       return { styles, links: links.map(l => l.href) };
     });
 
     await browser.close();
 
-    res.json({
-      html,
-      css
-    });
+    res.json({ html, css });
 
   } catch (err) {
     console.error(err);
