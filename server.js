@@ -133,6 +133,25 @@ app.post("/", (req, res) => {
   res.send(html);
 });
 
+app.get("/htmlCssOnly", (req, res) => {
+  let params = { seo };
+
+  if (req.query.randomize) {
+    const colors = require("./src/colors.json");
+    const allColors = Object.keys(colors);
+    const currentColor = allColors[(allColors.length * Math.random()) << 0];
+
+    params = {
+      color: colors[currentColor],
+      colorError: null,
+      seo
+    };
+  }
+
+  const html = render("./src/pages/htmlCssOnly.hbs", params);
+  res.send(html);
+});
+
 // -----------------------------
 // ③ サーバー起動
 // -----------------------------
