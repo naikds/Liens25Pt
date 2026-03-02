@@ -40,8 +40,10 @@ app.post("/fetch", async (req, res) => {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: "networkidle2" });
 
-    const html = await page.content();
+    // HTML を取得
+    let html = await page.content();
 
+    // CSS を取得
     const css = await page.evaluate(() => {
       const styles = [];
       document.querySelectorAll("style").forEach(style => {
@@ -52,13 +54,47 @@ app.post("/fetch", async (req, res) => {
       return { styles, links: links.map(l => l.href) };
     });
 
+    // Puppeteer 終了
     await browser.close();
+
+    // -----------------------------
+    // 画像を base64 に変換する処理
+    // -----------------------------
+    const cheerio = require("cheerio");
+    const $ = cheerio.load(html);
+
+    const imgs = $("img");
+
+    for (const img of imgs.toArray()) {
+      const src = $(img).attr("src");
+      if (!src) continue;
+
+      try {
+        // 絶対 URL に変換
+        const absoluteUrl = new URL(src, url).href;
+
+        // サーバー側で画像を取得
+        const response = await fetch(absoluteUrl);
+        const buffer = await response.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString("base64");
+
+        const mime = response.headers.get("content-type") || "image/png";
+
+        // src を base64 に置き換え
+        $(img).attr("src", `data:${mime};base64,${base64}`);
+      } catch (err) {
+        console.error("Image convert failed:", src, err);
+      }
+    }
+
+    // 加工後の HTML
+    html = $.html();
 
     res.json({ html, css });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to fetch page" });
+    res.status(500).json({ error: "Failed to fetch" });
   }
 });
 
