@@ -38,9 +38,17 @@ app.post("/fetch", async (req, res) => {
     });
 
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "networkidle2" });
 
-    // HTML を取得
+    // JS は有効のまま
+    await page.setJavaScriptEnabled(true);
+
+    // タイムアウトしない & JS 実行後の DOM を確実に取る
+    await page.goto(url, {
+      waitUntil: "load",
+      timeout: 0
+    });
+
+    // JS 実行後の HTML を取得
     let html = await page.content();
 
     // CSS を取得
@@ -54,44 +62,39 @@ app.post("/fetch", async (req, res) => {
       return { styles, links: links.map(l => l.href) };
     });
 
-    // Puppeteer 終了
     await browser.close();
 
-// -----------------------------
-// 画像を base64 に変換する処理
-// -----------------------------
-const cheerio = require("cheerio");
-const fetch = require("node-fetch"); // ← 追加
+    // -----------------------------
+    // 画像を base64 に変換
+    // -----------------------------
+    const cheerio = require("cheerio");
+    const fetch = require("node-fetch");
 
-const $ = cheerio.load(html);
-const imgs = $("img");
+    const $ = cheerio.load(html);
+    const imgs = $("img");
 
-for (const img of imgs.toArray()) {
-  const src = $(img).attr("src");
-  if (!src) continue;
+    for (const img of imgs.toArray()) {
+      const src = $(img).attr("src");
+      if (!src) continue;
 
-  try {
-    // 絶対 URL に変換
-    const absoluteUrl = new URL(src, url).href;
+      try {
+        const absoluteUrl = new URL(src, url).href;
 
-    // サーバー側で画像を取得
-    const response = await fetch(absoluteUrl);
-    if (!response.ok) throw new Error("Image fetch failed");
+        const response = await fetch(absoluteUrl);
+        if (!response.ok) throw new Error("Image fetch failed");
 
-    const buffer = await response.buffer();
-    const base64 = buffer.toString("base64");
+        const buffer = await response.buffer();
+        const base64 = buffer.toString("base64");
 
-    const mime = response.headers.get("content-type") || "image/png";
+        const mime = response.headers.get("content-type") || "image/png";
 
-    // src を base64 に置き換え
-    $(img).attr("src", `data:${mime};base64,${base64}`);
-  } catch (err) {
-    console.error("Image convert failed:", src, err);
-  }
-}
+        $(img).attr("src", `data:${mime};base64,${base64}`);
+      } catch (err) {
+        console.error("Image convert failed:", src, err);
+      }
+    }
 
-html = $.html();
-
+    html = $.html();
 
     res.json({ html, css });
 
@@ -100,6 +103,7 @@ html = $.html();
     res.status(500).json({ error: "Failed to fetch" });
   }
 });
+
 
 // -----------------------------
 // ② 元の Fastify のページを Express で再現
