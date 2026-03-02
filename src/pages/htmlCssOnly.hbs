@@ -6,7 +6,7 @@
     <button type="submit">送信</button>
   </form>
 
-  <pre id="result"></pre>
+  <div id="result"></div>
 
   <script>
     document.getElementById("form").addEventListener("submit", async (e) => {
@@ -20,7 +20,26 @@
       });
 
       const data = await res.json();
-      document.getElementById("result").textContent = JSON.stringify(data, null, 2);
+
+      // --- CSS（埋め込み） ---
+      if (data.css?.styles) {
+        const style = document.createElement("style");
+        style.textContent = data.css.styles.join("\n");
+        document.head.appendChild(style);
+      }
+
+      // --- CSS（外部リンク） ---
+      if (data.css?.links) {
+        data.css.links.forEach(linkUrl => {
+          const link = document.createElement("link");
+          link.rel = "stylesheet";
+          link.href = linkUrl;
+          document.head.appendChild(link);
+        });
+      }
+
+      // --- HTML を描画 ---
+      document.getElementById("result").innerHTML = data.html;
     });
   </script>
 </body>
