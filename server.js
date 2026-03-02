@@ -57,38 +57,41 @@ app.post("/fetch", async (req, res) => {
     // Puppeteer 終了
     await browser.close();
 
-    // -----------------------------
-    // 画像を base64 に変換する処理
-    // -----------------------------
-    const cheerio = require("cheerio");
-    const $ = cheerio.load(html);
+// -----------------------------
+// 画像を base64 に変換する処理
+// -----------------------------
+const cheerio = require("cheerio");
+const fetch = require("node-fetch"); // ← 追加
 
-    const imgs = $("img");
+const $ = cheerio.load(html);
+const imgs = $("img");
 
-    for (const img of imgs.toArray()) {
-      const src = $(img).attr("src");
-      if (!src) continue;
+for (const img of imgs.toArray()) {
+  const src = $(img).attr("src");
+  if (!src) continue;
 
-      try {
-        // 絶対 URL に変換
-        const absoluteUrl = new URL(src, url).href;
+  try {
+    // 絶対 URL に変換
+    const absoluteUrl = new URL(src, url).href;
 
-        // サーバー側で画像を取得
-        const response = await fetch(absoluteUrl);
-        const buffer = await response.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString("base64");
+    // サーバー側で画像を取得
+    const response = await fetch(absoluteUrl);
+    if (!response.ok) throw new Error("Image fetch failed");
 
-        const mime = response.headers.get("content-type") || "image/png";
+    const buffer = await response.buffer();
+    const base64 = buffer.toString("base64");
 
-        // src を base64 に置き換え
-        $(img).attr("src", `data:${mime};base64,${base64}`);
-      } catch (err) {
-        console.error("Image convert failed:", src, err);
-      }
-    }
+    const mime = response.headers.get("content-type") || "image/png";
 
-    // 加工後の HTML
-    html = $.html();
+    // src を base64 に置き換え
+    $(img).attr("src", `data:${mime};base64,${base64}`);
+  } catch (err) {
+    console.error("Image convert failed:", src, err);
+  }
+}
+
+html = $.html();
+
 
     res.json({ html, css });
 
