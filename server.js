@@ -1,3 +1,55 @@
+import express from "express";
+import puppeteer from "puppeteer";
+
+const app = express();
+app.use(express.json());
+
+app.post("/fetch", async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: "URL is required" });
+
+  try {
+    const browser = await puppeteer.launch({
+      headless: "new",
+      args: ["--no-sandbox", "--disable-setuid-sandbox"]
+    });
+    const page = await browser.newPage();
+
+    await page.goto(url, { waitUntil: "networkidle2" });
+
+    // HTML を取得
+    const html = await page.content();
+
+    // CSS を取得（link と style を抽出）
+    const css = await page.evaluate(() => {
+      const styles = [];
+
+      // <style> タグ
+      document.querySelectorAll("style").forEach(style => {
+        styles.push(style.innerHTML);
+      });
+
+      // <link rel="stylesheet"> の内容を取得
+      const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+      return { styles, links: links.map(l => l.href) };
+    });
+
+    await browser.close();
+
+    res.json({
+      html,
+      css
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch page" });
+  }
+});
+
+app.listen(3000, () => console.log("Server running on port 3000"));
+
+
 /**
  * This is the main Node.js server script for your project
  * Check out the two endpoints this back-end API provides in fastify.get and fastify.post below

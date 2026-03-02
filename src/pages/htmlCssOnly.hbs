@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <form id="form">
+    <input type="text" id="url" placeholder="URL を入力" />
+    <button type="submit">送信</button>
+  </form>
+
+  <pre id="result"></pre>
+
+  <script>
+    document.getElementById("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const url = document.getElementById("url").value;
+
+      const res = await fetch("/fetch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+
+      const data = await res.json();
+      document.getElementById("result").textContent = JSON.stringify(data, null, 2);
+    });
+  </script>
+</body>
+</html>
