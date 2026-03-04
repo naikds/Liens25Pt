@@ -45,15 +45,16 @@ app.post("/fetch", async (req, res) => {
         "--single-process"
       ]
     });    
+   
 
     const page = await browser.newPage();
     await page.setJavaScriptEnabled(true);
 
     await page.goto(url, {
-      waitUntil: "networkidle2",
-      timeout: 30000
+      waitUntil: "domcontentloaded",
+      timeout: 60000
     });
-
+ 
     let html = await page.content();
 
     const css = await page.evaluate(() => {
