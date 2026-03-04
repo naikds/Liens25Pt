@@ -35,8 +35,7 @@ app.post("/fetch", async (req, res) => {
     // Render 用 Puppeteer 設定
     const browser = await puppeteer.launch({
       headless: "new",
-      executablePath:
-        process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium-browser",
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -45,7 +44,7 @@ app.post("/fetch", async (req, res) => {
         "--no-zygote",
         "--single-process"
       ]
-    });
+    });    
 
     const page = await browser.newPage();
     await page.setJavaScriptEnabled(true);
