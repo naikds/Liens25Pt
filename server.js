@@ -11,7 +11,7 @@ app.use(express.urlencoded({ extended: true }));
 // public フォルダを静的配信
 app.use(express.static(path.join(__dirname, "public")));
 
-// Handlebars を使うための簡易レンダラー
+// Handlebars レンダラー
 function render(templatePath, params = {}) {
   const template = fs.readFileSync(templatePath, "utf8");
   const compiled = handlebars.compile(template);
@@ -25,40 +25,47 @@ if (seo.url === "glitch-default") {
 }
 
 // -----------------------------
-// ① Puppeteer API (/fetch)
+// Puppeteer API (/fetch)
 // -----------------------------
 app.post("/fetch", async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: "URL is required" });
 
   try {
+    // Render 用 Puppeteer 設定
     const browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"]
+      headless: "new",
+      executablePath:
+        process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium-browser",
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--no-zygote",
+        "--single-process"
+      ]
     });
 
     const page = await browser.newPage();
-
-    // JS は有効のまま
     await page.setJavaScriptEnabled(true);
 
-    // タイムアウトしない & JS 実行後の DOM を確実に取る
     await page.goto(url, {
-      waitUntil: "load",
-      timeout: 0
+      waitUntil: "networkidle2",
+      timeout: 30000
     });
 
-    // JS 実行後の HTML を取得
     let html = await page.content();
 
-    // CSS を取得
     const css = await page.evaluate(() => {
       const styles = [];
       document.querySelectorAll("style").forEach(style => {
         styles.push(style.innerHTML);
       });
 
-      const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+      const links = Array.from(
+        document.querySelectorAll('link[rel="stylesheet"]')
+      );
       return { styles, links: links.map(l => l.href) };
     });
 
@@ -80,12 +87,16 @@ app.post("/fetch", async (req, res) => {
       try {
         const absoluteUrl = new URL(src, url).href;
 
-        const response = await fetch(absoluteUrl);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+
+        const response = await fetch(absoluteUrl, { signal: controller.signal });
+        clearTimeout(timeout);
+
         if (!response.ok) throw new Error("Image fetch failed");
 
         const buffer = await response.buffer();
         const base64 = buffer.toString("base64");
-
         const mime = response.headers.get("content-type") || "image/png";
 
         $(img).attr("src", `data:${mime};base64,${base64}`);
@@ -97,19 +108,16 @@ app.post("/fetch", async (req, res) => {
     html = $.html();
 
     res.json({ html, css });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch" });
   }
 });
 
-
 // -----------------------------
-// ② 元の Fastify のページを Express で再現
+// ページルーティング
 // -----------------------------
 
-// Home
 app.get("/", (req, res) => {
   let params = { seo };
 
@@ -129,7 +137,6 @@ app.get("/", (req, res) => {
   res.send(html);
 });
 
-// tictactoe
 app.get("/tictactoe", (req, res) => {
   let params = { seo };
 
@@ -149,7 +156,6 @@ app.get("/tictactoe", (req, res) => {
   res.send(html);
 });
 
-// POST /
 app.post("/", (req, res) => {
   let params = { seo };
   let color = req.body.color;
@@ -196,7 +202,7 @@ app.get("/htmlCssOnly", (req, res) => {
 });
 
 // -----------------------------
-// ③ サーバー起動
+// サーバー起動
 // -----------------------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
